@@ -1,0 +1,12 @@
+doc/Makefile
+Makefile
+config.log
+config.status
+src/.deps/
+src/Makefile
+src/cache.o
+src/curl.o
+src/s3fs
+src/s3fs.o
+src/string_util.o
+test/Makefile
