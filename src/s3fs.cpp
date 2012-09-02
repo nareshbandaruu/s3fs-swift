@@ -2191,7 +2191,7 @@ static int rename_directory(const char *from, const char *to) {
     if (NextMarker.size() > 0)
       query += "&marker=" + urlEncode(NextMarker);
 
-    query += "&limit=";
+    query += "&max-keys=";
     query.append(IntToStr(max_keys));
 
     string url = host + resource + "?" + query;
@@ -2913,7 +2913,7 @@ static int list_bucket(const char *path, struct s3_object **head) {
   else
     query += urlEncode(string(s3_realpath).substr(1));
 
-  query += "&limit=1000";
+  query += "&max-keys=1000";
 
   while(truncated) {
     string url = host + resource + "?" + query;
