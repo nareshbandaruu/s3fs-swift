@@ -283,7 +283,7 @@ string calc_signature(
   int count = 0;
   if(headers != 0) {
     do {
-      if(strncmp(headers->data, "x-amz", 5) == 0) {
+      if(strncmp(headers->data, "X-Object-Meta", 13) == 0) {
         ++count;
         StringToSign += headers->data;
         StringToSign += 10; // linefeed
@@ -471,7 +471,7 @@ int get_headers(const char* path, headers_t& meta) {
       meta[key] = value;
     if(key == "Last-Modified")
       meta[key] = value;
-    if(key.substr(0, 5) == "x-amz")
+    if(key.substr(0, 13) == "X-Object-Meta")
       meta[key] = value;
   }
 
@@ -517,7 +517,7 @@ int get_local_fd(const char* path) {
       // if the local and remote mtime/size
       // do not match we have an invalid cache entry
       if(str(st.st_size) != responseHeaders["Content-Length"] || 
-        (str(st.st_mtime) != responseHeaders["x-amz-meta-mtime"])) {
+        (str(st.st_mtime) != responseHeaders["X-Object-Meta-mtime"])) {
         if(close(fd) == -1)
           YIKES(-errno);
 
@@ -528,7 +528,7 @@ int get_local_fd(const char* path) {
 
   // need to download?
   if(fd == -1) {
-    mode_t mode = strtoul(responseHeaders["x-amz-meta-mode"].c_str(), (char **)NULL, 10);
+    mode_t mode = strtoul(responseHeaders["X-Object-Meta-mode"].c_str(), (char **)NULL, 10);
 
     if(use_cache.size() > 0) {
       // only download files, not folders
@@ -590,7 +590,7 @@ int get_local_fd(const char* path) {
     if(use_cache.size() > 0 && !S_ISLNK(mode)) {
       // make the file's mtime match that of the file on s3
       struct utimbuf n_mtime;
-      n_mtime.modtime = strtoul(responseHeaders["x-amz-meta-mtime"].c_str(), (char **) NULL, 10);
+      n_mtime.modtime = strtoul(responseHeaders["X-Object-Meta-mtime"].c_str(), (char **) NULL, 10);
       n_mtime.actime = n_mtime.modtime;
       if((utime(cache_path.c_str(), &n_mtime)) == -1) {
         YIKES(-errno);
@@ -636,7 +636,6 @@ static int put_headers(const char *path, headers_t meta) {
   string date = get_date();
   headers.append("Date: " + date);
 
-  meta["x-amz-acl"] = default_acl;
   string ContentType = meta["Content-Type"];
 
   for (headers_t::iterator iter = meta.begin(); iter != meta.end(); ++iter) {
@@ -644,16 +643,11 @@ static int put_headers(const char *path, headers_t meta) {
     string value = (*iter).second;
     if (key == "Content-Type")
       headers.append(key + ":" + value);
-    if (key.substr(0,9) == "x-amz-acl")
+    if (key.substr(0,13) == "X-Object-Meta")
       headers.append(key + ":" + value);
-    if (key.substr(0,10) == "x-amz-meta")
-      headers.append(key + ":" + value);
-    if (key == "x-amz-copy-source")
+    if (key == "X-Copy-From")
       headers.append(key + ":" + value);
   }
-
-  if(use_rrs.substr(0,1) == "1")
-    headers.append("x-amz-storage-class:REDUCED_REDUNDANCY");
 
   if(public_bucket.substr(0,1) != "1")
     headers.append("Authorization: AWS " + AWSAccessKeyId + ":" +
@@ -686,13 +680,13 @@ static int put_headers(const char *path, headers_t meta) {
     return result;
 
   // Update mtime in local file cache.
-  if(meta.count("x-amz-meta-mtime") > 0 && use_cache.size() > 0) {
+  if(meta.count("X-Object-Meta-mtime") > 0 && use_cache.size() > 0) {
     struct stat st;
     struct utimbuf n_mtime;
     string cache_path(use_cache + "/" + bucket + path);
 
     if((stat(cache_path.c_str(), &st)) == 0) {
-      n_mtime.modtime = strtoul(meta["x-amz-meta-mtime"].c_str(), (char **) NULL, 10);
+      n_mtime.modtime = strtoul(meta["X-Object-Meta-mtime"].c_str(), (char **) NULL, 10);
       n_mtime.actime = n_mtime.modtime;
       if((utime(cache_path.c_str(), &n_mtime)) == -1) {
         YIKES(-errno);
@@ -742,7 +736,7 @@ static int put_multipart_headers(const char *path, headers_t meta) {
 
     stringstream ss;
     ss << "bytes=" << bytes_written << "-" << (bytes_written + chunk);
-    meta["x-amz-copy-source-range"] = ss.str();
+    meta["X-Copy-From-range"] = ss.str();
 
     part.etag = copy_part(path, path, parts.size() + 1, upload_id, meta);
     parts.push_back(part);
@@ -758,13 +752,13 @@ static int put_multipart_headers(const char *path, headers_t meta) {
   }
 
   // Update mtime in local file cache.
-  if(meta.count("x-amz-meta-mtime") > 0 && use_cache.size() > 0) {
+  if(meta.count("X-Object-Meta-mtime") > 0 && use_cache.size() > 0) {
     struct stat st;
     struct utimbuf n_mtime;
     string cache_path(use_cache + "/" + bucket + path);
 
     if((stat(cache_path.c_str(), &st)) == 0) {
-      n_mtime.modtime = strtoul(meta["x-amz-meta-mtime"].c_str(), (char **) NULL, 10);
+      n_mtime.modtime = strtoul(meta["X-Object-Meta-mtime"].c_str(), (char **) NULL, 10);
       n_mtime.actime = n_mtime.modtime;
       if((utime(cache_path.c_str(), &n_mtime)) == -1) {
         YIKES(-errno);
@@ -816,21 +810,15 @@ static int put_local_fd_small_file(const char* path, headers_t meta, int fd) {
 
   string ContentType = meta["Content-Type"];
   headers.append("Date: " + date);
-  meta["x-amz-acl"] = default_acl;
 
   for (headers_t::iterator iter = meta.begin(); iter != meta.end(); ++iter) {
     string key = (*iter).first;
     string value = (*iter).second;
     if (key == "Content-Type")
       headers.append(key + ":" + value);
-    if (key.substr(0,9) == "x-amz-acl")
-      headers.append(key + ":" + value);
-    if (key.substr(0,10) == "x-amz-meta")
+    if (key.substr(0,13) == "X-Object-Meta")
       headers.append(key + ":" + value);
   }
-
-  if(use_rrs.substr(0,1) == "1")
-    headers.append("x-amz-storage-class:REDUCED_REDUNDANCY");
   
   if(public_bucket.substr(0,1) != "1")
     headers.append("Authorization: AWS " + AWSAccessKeyId + ":" +
@@ -1029,7 +1017,6 @@ string initiate_multipart_upload(const char *path, off_t size, headers_t meta) {
   CURL *curl = NULL;
   int result;
   string auth;
-  string acl;
   string url;
   string my_url;
   string date;
@@ -1073,16 +1060,11 @@ string initiate_multipart_upload(const char *path, off_t size, headers_t meta) {
   ContentType.append(ctype_data);
   slist = curl_slist_append(slist, ContentType.c_str());
 
-  // x-amz headers: (a) alphabetical order and (b) no spaces after colon
-  acl.assign("x-amz-acl:");
-  acl.append(default_acl);
-  slist = curl_slist_append(slist, acl.c_str());
-
   for(headers_t::iterator iter = meta.begin(); iter != meta.end(); ++iter) {
     string key = (*iter).first;
     string value = (*iter).second;
 
-    if(key.substr(0,10) == "x-amz-meta") {
+    if(key.substr(0,13) == "X-Object-Meta") {
       string entry;
       entry.assign(key);
       entry.append(":");
@@ -1090,9 +1072,6 @@ string initiate_multipart_upload(const char *path, off_t size, headers_t meta) {
       slist = curl_slist_append(slist, entry.c_str());
     }
   }
-
-  if(use_rrs.substr(0,1) == "1")
-    slist = curl_slist_append(slist, "x-amz-storage-class:REDUCED_REDUNDANCY");
 
   if(public_bucket.substr(0,1) != "1") {
      auth.assign("Authorization: AWS ");
@@ -1431,21 +1410,17 @@ string copy_part(const char *from, const char *to, int part_number, string uploa
   headers.append("Date: " + date);
 
   string ContentType = meta["Content-Type"];
-  meta["x-amz-acl"] = default_acl;
 
   for(headers_t::iterator iter = meta.begin(); iter != meta.end(); ++iter) {
     string key = (*iter).first;
     string value = (*iter).second;
     if (key == "Content-Type")
       headers.append(key + ":" + value);
-    if (key == "x-amz-copy-source")
+    if (key == "X-Copy-From")
       headers.append(key + ":" + value);
-    if (key == "x-amz-copy-source-range")
+    if (key == "X-Copy-From-range")
       headers.append(key + ":" + value);
   }
-
-  if(use_rrs.substr(0,1) == "1")
-    headers.append("x-amz-storage-class:REDUCED_REDUNDANCY");
 
   if(public_bucket.substr(0,1) != "1")
     headers.append("Authorization: AWS " + AWSAccessKeyId + ":" +
@@ -1580,14 +1555,14 @@ static int s3fs_getattr(const char *path, struct stat *stbuf) {
 
   stbuf->st_nlink = 1; // see fuse faq
 
-  stbuf->st_mtime = strtoul(responseHeaders["x-amz-meta-mtime"].c_str(), (char **)NULL, 10);
+  stbuf->st_mtime = strtoul(responseHeaders["X-Object-Meta-mtime"].c_str(), (char **)NULL, 10);
   if (stbuf->st_mtime == 0) {
     long LastModified;
     if (curl_easy_getinfo(curl, CURLINFO_FILETIME, &LastModified) == 0)
       stbuf->st_mtime = LastModified;
   }
 
-  stbuf->st_mode = strtoul(responseHeaders["x-amz-meta-mode"].c_str(), (char **)NULL, 10);
+  stbuf->st_mode = strtoul(responseHeaders["X-Object-Meta-mode"].c_str(), (char **)NULL, 10);
   char* ContentType = 0;
   if (curl_easy_getinfo(curl, CURLINFO_CONTENT_TYPE, &ContentType) == 0) {
     if (ContentType)
@@ -1601,8 +1576,8 @@ static int s3fs_getattr(const char *path, struct stat *stbuf) {
   if (S_ISREG(stbuf->st_mode))
     stbuf->st_blocks = stbuf->st_size / 512 + 1;
 
-  stbuf->st_uid = strtoul(responseHeaders["x-amz-meta-uid"].c_str(), (char **)NULL, 10);
-  stbuf->st_gid = strtoul(responseHeaders["x-amz-meta-gid"].c_str(), (char **)NULL, 10);
+  stbuf->st_uid = strtoul(responseHeaders["X-Object-Meta-uid"].c_str(), (char **)NULL, 10);
+  stbuf->st_gid = strtoul(responseHeaders["X-Object-Meta-gid"].c_str(), (char **)NULL, 10);
 
   // update stat cache
   add_stat_cache_entry(path, stbuf);
@@ -1736,12 +1711,11 @@ static int create_file_object(const char *path, mode_t mode) {
   headers.append("Date: " + date);
   string contentType(lookupMimeType(path));
   headers.append("Content-Type: " + contentType);
-  // x-amz headers: (a) alphabetical order and (b) no spaces after colon
-  headers.append("x-amz-acl:" + default_acl);
-  headers.append("x-amz-meta-gid:" + str(getgid()));
-  headers.append("x-amz-meta-mode:" + str(mode));
-  headers.append("x-amz-meta-mtime:" + str(time(NULL)));
-  headers.append("x-amz-meta-uid:" + str(getuid()));
+  // X-Object-Meta headers: (a) alphabetical order and (b) no spaces after colon
+  headers.append("X-Object-Meta-gid:" + str(getgid()));
+  headers.append("X-Object-Meta-mode:" + str(mode));
+  headers.append("X-Object-Meta-mtime:" + str(time(NULL)));
+  headers.append("X-Object-Meta-uid:" + str(getuid()));
   if(public_bucket.substr(0,1) != "1")
     headers.append("Authorization: AWS " + AWSAccessKeyId + ":" +
       calc_signature("PUT", contentType, date, headers.get(), resource));
@@ -1825,15 +1799,11 @@ static int s3fs_mkdir(const char *path, mode_t mode) {
 
   headers.append("Date: " + date);
   headers.append("Content-Type: application/x-directory");
-  // x-amz headers: (a) alphabetical order and (b) no spaces after colon
-  headers.append("x-amz-acl:" + default_acl);
-  headers.append("x-amz-meta-gid:" + str(getgid()));
-  headers.append("x-amz-meta-mode:" + str(mode));
-  headers.append("x-amz-meta-mtime:" + str(time(NULL)));
-  headers.append("x-amz-meta-uid:" + str(getuid()));
-  if (use_rrs.substr(0,1) == "1") {
-    headers.append("x-amz-storage-class:REDUCED_REDUNDANCY");
-  }
+  // X-Object-Meta headers: (a) alphabetical order and (b) no spaces after colon
+  headers.append("X-Object-Meta-gid:" + str(getgid()));
+  headers.append("X-Object-Meta-mode:" + str(mode));
+  headers.append("X-Object-Meta-mtime:" + str(time(NULL)));
+  headers.append("X-Object-Meta-uid:" + str(getuid()));
   if (public_bucket.substr(0,1) != "1") {
     headers.append("Authorization: AWS " + AWSAccessKeyId + ":" +
       calc_signature("PUT", "application/x-directory", date, headers.get(), resource));
@@ -1926,7 +1896,7 @@ static int s3fs_rmdir(const char *path) {
       else
         query += urlEncode(string(s3_realpath).substr(1));
 
-      query += "&max-keys=1";
+      query += "&limit=1";
       url = host + resource + "?"+ query;
 
       curl = create_curl_handle();
@@ -2016,8 +1986,8 @@ static int s3fs_symlink(const char *from, const char *to) {
     cout << "s3fs_symlink[from=" << from << "][to=" << to << "]" << endl;
 
   headers_t headers;
-  headers["x-amz-meta-mode"] = str(S_IFLNK);
-  headers["x-amz-meta-mtime"] = str(time(NULL));
+  headers["X-Object-Meta-mode"] = str(S_IFLNK);
+  headers["X-Object-Meta-mtime"] = str(time(NULL));
 
   fd = fileno(tmpfile());
   if(fd == -1) {
@@ -2064,9 +2034,8 @@ static int rename_object(const char *from, const char *to) {
     return result;
 
   s3_realpath = get_realpath(from);
-  meta["x-amz-copy-source"] = urlEncode("/" + bucket + s3_realpath);
+  meta["X-Copy-From"] = urlEncode("/" + bucket + s3_realpath);
   meta["Content-Type"] = lookupMimeType(to);
-  meta["x-amz-metadata-directive"] = "REPLACE";
 
   result = put_headers(to, meta);
   if(result != 0)
@@ -2098,7 +2067,7 @@ static int rename_large_object(const char *from, const char *to) {
     return -1;
 
   meta["Content-Type"] = lookupMimeType(to);
-  meta["x-amz-copy-source"] = urlEncode("/" + bucket + s3_realpath);
+  meta["X-Copy-From"] = urlEncode("/" + bucket + s3_realpath);
 
   upload_id = initiate_multipart_upload(to, buf.st_size, meta);
   if(upload_id.size() == 0)
@@ -2117,7 +2086,7 @@ static int rename_large_object(const char *from, const char *to) {
 
     stringstream ss;
     ss << "bytes=" << bytes_written << "-" << (bytes_written + chunk);
-    meta["x-amz-copy-source-range"] = ss.str();
+    meta["X-Copy-From-range"] = ss.str();
 
     part.etag = copy_part(from, to, parts.size() + 1, upload_id, meta);
     parts.push_back(part);
@@ -2157,8 +2126,7 @@ static int clone_directory_object(const char *from, const char *to) {
   if(result != 0)
     return result;
 
-  meta["x-amz-copy-source"] = urlEncode("/" + bucket + mount_prefix + from);
-  meta["x-amz-metadata-directive"] = "REPLACE";
+  meta["X-Copy-From"] = urlEncode("/" + bucket + mount_prefix + from);
 
   result = put_headers(to, meta);
   if(result != 0)
@@ -2223,7 +2191,7 @@ static int rename_directory(const char *from, const char *to) {
     if (NextMarker.size() > 0)
       query += "&marker=" + urlEncode(NextMarker);
 
-    query += "&max-keys=";
+    query += "&limit=";
     query.append(IntToStr(max_keys));
 
     string url = host + resource + "?" + query;
@@ -2446,7 +2414,6 @@ static int s3fs_link(const char *from, const char *to) {
 
 static int s3fs_chmod(const char *path, mode_t mode) {
   int result;
-  char *s3_realpath;
   headers_t meta;
 
   if(foreground) 
@@ -2456,11 +2423,7 @@ static int s3fs_chmod(const char *path, mode_t mode) {
   if(result != 0)
     return result;
 
-  s3_realpath = get_realpath(path);
-  meta["x-amz-meta-mode"] = str(mode);
-  meta["x-amz-copy-source"] = urlEncode("/" + bucket + s3_realpath);
-  meta["x-amz-metadata-directive"] = "REPLACE";
-  free(s3_realpath);
+  meta["X-Object-Meta-mode"] = str(mode);
 
   if(put_headers(path, meta) != 0)
     return -EIO;
@@ -2472,7 +2435,6 @@ static int s3fs_chmod(const char *path, mode_t mode) {
 
 static int s3fs_chown(const char *path, uid_t uid, gid_t gid) {
   int result;
-  char *s3_realpath;
 
   if(foreground) 
     printf("s3fs_chown [path=%s] [uid=%d] [gid=%d]\n", path, uid, gid);
@@ -2484,16 +2446,11 @@ static int s3fs_chown(const char *path, uid_t uid, gid_t gid) {
 
   struct passwd *aaa = getpwuid(uid);
   if(aaa != 0)
-    meta["x-amz-meta-uid"] = str((*aaa).pw_uid);
+    meta["X-Object-Meta-uid"] = str((*aaa).pw_uid);
 
   struct group *bbb = getgrgid(gid);
   if(bbb != 0)
-    meta["x-amz-meta-gid"] = str((*bbb).gr_gid);
-
-  s3_realpath = get_realpath(path);
-  meta["x-amz-copy-source"] = urlEncode("/" + bucket + s3_realpath);
-  meta["x-amz-metadata-directive"] = "REPLACE";
-  free(s3_realpath);
+    meta["X-Object-Meta-gid"] = str((*bbb).gr_gid);
 
   if(put_headers(path, meta) != 0)
     return -EIO;
@@ -2632,7 +2589,7 @@ static int s3fs_flush(const char *path, struct fuse_file_info *fi) {
         YIKES(-errno);
 
       if(str(st.st_size) == meta["Content-Length"] && 
-        (str(st.st_mtime) == meta["x-amz-meta-mtime"])) {
+        (str(st.st_mtime) == meta["X-Object-Meta-mtime"])) {
         return result;
       }
     }
@@ -2644,7 +2601,7 @@ static int s3fs_flush(const char *path, struct fuse_file_info *fi) {
       string cache_path(use_cache + "/" + bucket + path);
 
       if((stat(cache_path.c_str(), &st)) == 0) {
-        n_mtime.modtime = strtoul(meta["x-amz-meta-mtime"].c_str(), (char **) NULL, 10);
+        n_mtime.modtime = strtoul(meta["X-Object-Meta-mtime"].c_str(), (char **) NULL, 10);
         n_mtime.actime = n_mtime.modtime;
         if((utime(cache_path.c_str(), &n_mtime)) == -1) {
           YIKES(-errno);
@@ -2847,7 +2804,7 @@ static int s3fs_readdir(
 
         // mode
         st.st_mode = strtoul(
-            (*response.responseHeaders)["x-amz-meta-mode"].c_str(), (char **)NULL, 10);
+            (*response.responseHeaders)["X-Object-Meta-mode"].c_str(), (char **)NULL, 10);
 
         // content-type
         char *ContentType = 0;
@@ -2856,7 +2813,7 @@ static int s3fs_readdir(
             st.st_mode |= strcmp(ContentType, "application/x-directory") == 0 ? S_IFDIR : S_IFREG;
 
         // mtime
-        st.st_mtime = strtoul((*response.responseHeaders)["x-amz-meta-mtime"].c_str(), (char **)NULL, 10);
+        st.st_mtime = strtoul((*response.responseHeaders)["X-Object-Meta-mtime"].c_str(), (char **)NULL, 10);
         if(st.st_mtime == 0) {
           long LastModified;
           if(curl_easy_getinfo(curl_handle, CURLINFO_FILETIME, &LastModified) == 0)
@@ -2872,8 +2829,8 @@ static int s3fs_readdir(
         if(S_ISREG(st.st_mode))
           st.st_blocks = st.st_size / 512 + 1;
 
-        st.st_uid = strtoul((*response.responseHeaders)["x-amz-meta-uid"].c_str(), (char **)NULL, 10);
-        st.st_gid = strtoul((*response.responseHeaders)["x-amz-meta-gid"].c_str(), (char **)NULL, 10);
+        st.st_uid = strtoul((*response.responseHeaders)["X-Object-Meta-uid"].c_str(), (char **)NULL, 10);
+        st.st_gid = strtoul((*response.responseHeaders)["X-Object-Meta-gid"].c_str(), (char **)NULL, 10);
 
         add_stat_cache_entry(response.path.c_str(), &st);
 
@@ -2956,7 +2913,7 @@ static int list_bucket(const char *path, struct s3_object **head) {
   else
     query += urlEncode(string(s3_realpath).substr(1));
 
-  query += "&max-keys=1000";
+  query += "&limit=1000";
 
   while(truncated) {
     string url = host + resource + "?" + query;
@@ -3131,7 +3088,7 @@ static int remote_mountpath_exists(const char *path) {
   }
 
   struct stat stbuf;
-  stbuf.st_mode = strtoul(responseHeaders["x-amz-meta-mode"].c_str(), (char **)NULL, 10);
+  stbuf.st_mode = strtoul(responseHeaders["X-Object-Meta-mode"].c_str(), (char **)NULL, 10);
   char* ContentType = 0;
   if(curl_easy_getinfo(curl, CURLINFO_CONTENT_TYPE, &ContentType) == 0)
     if(ContentType)
@@ -3175,7 +3132,7 @@ static unsigned long id_function(void) {
 }
 
 static void* s3fs_init(struct fuse_conn_info *conn) {
-  syslog(LOG_INFO, "init $Rev: 367 $");
+  syslog(LOG_INFO, "init $Format:%cd$");
   // openssl
   mutex_buf = static_cast<pthread_mutex_t*>(malloc(CRYPTO_num_locks() * sizeof(pthread_mutex_t)));
   for (int i = 0; i < CRYPTO_num_locks(); i++)
@@ -3245,7 +3202,6 @@ static int s3fs_access(const char *path, int mask) {
 // aka touch
 static int s3fs_utimens(const char *path, const struct timespec ts[2]) {
   int result;
-  char *s3_realpath;
   headers_t meta;
 
   if(foreground) 
@@ -3255,11 +3211,7 @@ static int s3fs_utimens(const char *path, const struct timespec ts[2]) {
   if(result != 0)
     return result;
 
-  s3_realpath = get_realpath(path);
-  meta["x-amz-meta-mtime"] = str(ts[1].tv_sec);
-  meta["x-amz-copy-source"] = urlEncode("/" + bucket + s3_realpath);
-  meta["x-amz-metadata-directive"] = "REPLACE";
-  free(s3_realpath);
+  meta["X-Object-Meta-mtime"] = str(ts[1].tv_sec);
 
   if(foreground) 
     cout << "  calling put_headers [path=" << path << "]" << endl;
@@ -4059,19 +4011,11 @@ static void show_help (void) {
     "\n"
     "             <option_name>=<option_value>\n"
     "\n"
-    "   default_acl (default=\"private\")\n"
-    "     - the default canned acl to apply to all written s3 objects\n"
-    "          see http://aws.amazon.com/documentation/s3/ for the \n"
-    "          full list of canned acls\n"
-    "\n"
     "   retries (default=\"2\")\n"
     "      - number of times to retry a failed s3 transaction\n"
     "\n"
     "   use_cache (default=\"\" which means disabled)\n"
     "      - local folder to use for local file cache\n"
-    "\n"
-    "   use_rrs (default=\"\" which means diabled)\n"
-    "      - use Amazon's Reduced Redundancy Storage when set to 1\n"
     "\n"
     "   public_bucket (default=\"\" which means disabled)\n"
     "      - anonymously mount a public bucket when set to 1\n"
@@ -4206,10 +4150,6 @@ static int my_fuse_opt_proc(void *data, const char *arg, int key, struct fuse_ar
   }
 
   if (key == FUSE_OPT_KEY_OPT) {
-    if (strstr(arg, "default_acl=") != 0) {
-      default_acl = strchr(arg, '=') + 1;
-      return 0;
-    }
     if (strstr(arg, "retries=") != 0) {
       retries = atoi(strchr(arg, '=') + 1);
       return 0;
@@ -4224,17 +4164,6 @@ static int my_fuse_opt_proc(void *data, const char *arg, int key, struct fuse_ar
       return 0;
     }
     
-    if (strstr(arg, "use_rrs=") != 0) {
-      use_rrs = strchr(arg, '=') + 1;
-      if (strcmp(use_rrs.c_str(), "1") == 0 || 
-          strcmp(use_rrs.c_str(), "")  == 0 ) {
-        return 0;
-      } else {
-         fprintf(stderr, "%s: poorly formed argument to option: use_rrs\n", 
-                 program_name.c_str());
-         exit(EXIT_FAILURE);
-      }
-    }
     if (strstr(arg, "ssl_verify_hostname=") != 0) {
       ssl_verify_hostname = strchr(arg, '=') + 1;
       if (strcmp(ssl_verify_hostname.c_str(), "1") == 0 || 
