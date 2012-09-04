@@ -523,7 +523,7 @@ int get_local_fd(const char* path) {
       // if the local and remote mtime/size
       // do not match we have an invalid cache entry
       if(str(st.st_size) != responseHeaders["Content-Length"] || 
-        (str(st.st_mtime) != responseHeaders["X-Object-Meta-mtime"])) {
+        (str(st.st_mtime) != responseHeaders["X-Amz-Meta-mtime"])) {
         if(close(fd) == -1)
           YIKES(-errno);
 
@@ -534,7 +534,7 @@ int get_local_fd(const char* path) {
 
   // need to download?
   if(fd == -1) {
-    mode_t mode = strtoul(responseHeaders["X-Object-Meta-mode"].c_str(), (char **)NULL, 10);
+    mode_t mode = strtoul(responseHeaders["X-Amz-Meta-mode"].c_str(), (char **)NULL, 10);
 
     if(use_cache.size() > 0) {
       // only download files, not folders
@@ -596,7 +596,7 @@ int get_local_fd(const char* path) {
     if(use_cache.size() > 0 && !S_ISLNK(mode)) {
       // make the file's mtime match that of the file on s3
       struct utimbuf n_mtime;
-      n_mtime.modtime = strtoul(responseHeaders["X-Object-Meta-mtime"].c_str(), (char **) NULL, 10);
+      n_mtime.modtime = strtoul(responseHeaders["X-Amz-Meta-mtime"].c_str(), (char **) NULL, 10);
       n_mtime.actime = n_mtime.modtime;
       if((utime(cache_path.c_str(), &n_mtime)) == -1) {
         YIKES(-errno);
@@ -647,10 +647,11 @@ static int put_headers(const char *path, headers_t meta) {
   for (headers_t::iterator iter = meta.begin(); iter != meta.end(); ++iter) {
     string key = (*iter).first;
     string value = (*iter).second;
+    cout << "put_headers[key=" << key << "][value=" << value << "]" << endl;
     if (key == "Content-Type")
       headers.append(key + ":" + value);
-    if (key.substr(0,13) == "X-Object-Meta")
-      headers.append(key + ":" + value);
+    if (key.substr(0,10) == "X-Amz-Meta")
+      headers.append("X-Object-Meta" + key.substr(10, key.size() - 1) + ":" + value);
     if (key == "X-Copy-From")
       headers.append(key + ":" + value);
   }
@@ -820,10 +821,11 @@ static int put_local_fd_small_file(const char* path, headers_t meta, int fd) {
   for (headers_t::iterator iter = meta.begin(); iter != meta.end(); ++iter) {
     string key = (*iter).first;
     string value = (*iter).second;
+    cout << "put_local_fd_small_file[key=" << key << ", value=" << value << "]" << endl;
     if (key == "Content-Type")
       headers.append(key + ":" + value);
-    if (key.substr(0,13) == "X-Object-Meta")
-      headers.append(key + ":" + value);
+    // if (key.substr(0,13) == "X-Object-Meta")
+    //   headers.append(key + ":" + value);
   }
   
   if(public_bucket.substr(0,1) != "1")
@@ -844,6 +846,8 @@ static int put_local_fd_small_file(const char* path, headers_t meta, int fd) {
     free(body.text);
   free(s3_realpath);
   destroy_curl_handle(curl);
+
+  result = put_headers(path, meta);
 
   if(result != 0)
     return result;
@@ -1561,14 +1565,14 @@ static int s3fs_getattr(const char *path, struct stat *stbuf) {
 
   stbuf->st_nlink = 1; // see fuse faq
 
-  stbuf->st_mtime = strtoul(responseHeaders["X-Object-Meta-mtime"].c_str(), (char **)NULL, 10);
+  stbuf->st_mtime = strtoul(responseHeaders["X-Amz-Meta-mtime"].c_str(), (char **)NULL, 10);
   if (stbuf->st_mtime == 0) {
     long LastModified;
     if (curl_easy_getinfo(curl, CURLINFO_FILETIME, &LastModified) == 0)
       stbuf->st_mtime = LastModified;
   }
 
-  stbuf->st_mode = strtoul(responseHeaders["X-Object-Meta-mode"].c_str(), (char **)NULL, 10);
+  stbuf->st_mode = strtoul(responseHeaders["X-Amz-Meta-mode"].c_str(), (char **)NULL, 10);
   char* ContentType = 0;
   if (curl_easy_getinfo(curl, CURLINFO_CONTENT_TYPE, &ContentType) == 0) {
     if (ContentType)
@@ -1582,8 +1586,8 @@ static int s3fs_getattr(const char *path, struct stat *stbuf) {
   if (S_ISREG(stbuf->st_mode))
     stbuf->st_blocks = stbuf->st_size / 512 + 1;
 
-  stbuf->st_uid = strtoul(responseHeaders["X-Object-Meta-uid"].c_str(), (char **)NULL, 10);
-  stbuf->st_gid = strtoul(responseHeaders["X-Object-Meta-gid"].c_str(), (char **)NULL, 10);
+  stbuf->st_uid = strtoul(responseHeaders["X-Amz-Meta-uid"].c_str(), (char **)NULL, 10);
+  stbuf->st_gid = strtoul(responseHeaders["X-Amz-Meta-gid"].c_str(), (char **)NULL, 10);
 
   // update stat cache
   add_stat_cache_entry(path, stbuf);
@@ -2810,7 +2814,7 @@ static int s3fs_readdir(
 
         // mode
         st.st_mode = strtoul(
-            (*response.responseHeaders)["X-Object-Meta-mode"].c_str(), (char **)NULL, 10);
+            (*response.responseHeaders)["X-Amz-Meta-mode"].c_str(), (char **)NULL, 10);
 
         // content-type
         char *ContentType = 0;
@@ -2819,7 +2823,7 @@ static int s3fs_readdir(
             st.st_mode |= strcmp(ContentType, "application/x-directory") == 0 ? S_IFDIR : S_IFREG;
 
         // mtime
-        st.st_mtime = strtoul((*response.responseHeaders)["X-Object-Meta-mtime"].c_str(), (char **)NULL, 10);
+        st.st_mtime = strtoul((*response.responseHeaders)["X-Amz-Meta-mtime"].c_str(), (char **)NULL, 10);
         if(st.st_mtime == 0) {
           long LastModified;
           if(curl_easy_getinfo(curl_handle, CURLINFO_FILETIME, &LastModified) == 0)
@@ -2835,8 +2839,8 @@ static int s3fs_readdir(
         if(S_ISREG(st.st_mode))
           st.st_blocks = st.st_size / 512 + 1;
 
-        st.st_uid = strtoul((*response.responseHeaders)["X-Object-Meta-uid"].c_str(), (char **)NULL, 10);
-        st.st_gid = strtoul((*response.responseHeaders)["X-Object-Meta-gid"].c_str(), (char **)NULL, 10);
+        st.st_uid = strtoul((*response.responseHeaders)["X-Amz-Meta-uid"].c_str(), (char **)NULL, 10);
+        st.st_gid = strtoul((*response.responseHeaders)["X-Amz-Meta-gid"].c_str(), (char **)NULL, 10);
 
         add_stat_cache_entry(response.path.c_str(), &st);
 
@@ -3098,7 +3102,7 @@ static int remote_mountpath_exists(const char *path) {
   }
 
   struct stat stbuf;
-  stbuf.st_mode = strtoul(responseHeaders["X-Object-Meta-mode"].c_str(), (char **)NULL, 10);
+  stbuf.st_mode = strtoul(responseHeaders["X-Amz-Meta-mode"].c_str(), (char **)NULL, 10);
   char* ContentType = 0;
   if(curl_easy_getinfo(curl, CURLINFO_CONTENT_TYPE, &ContentType) == 0)
     if(ContentType)
