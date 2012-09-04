@@ -283,7 +283,7 @@ string calc_signature(
   int count = 0;
   if(headers != 0) {
     do {
-      if(strncmp(headers->data, "X-Object-Meta", 13) == 0) {
+      if(strncmp(headers->data, "x-amz", 5) == 0) {
         ++count;
         StringToSign += headers->data;
         StringToSign += 10; // linefeed
@@ -425,6 +425,12 @@ int get_headers(const char* path, headers_t& meta) {
   s3_realpath = get_realpath(path);
   string resource(urlEncode(service_path + bucket + s3_realpath));
   string url(host + resource);
+  cout << "calling get_headers [service_path=" << service_path << "]" << endl;
+  cout << "calling get_headers [bucket=" << bucket << "]" << endl;
+  cout << "calling get_headers [s3_realpath=" << s3_realpath << "]" << endl;
+  cout << "calling get_headers [host=" << host << "]" << endl;
+  cout << "calling get_headers [resource=" << resource << "]" << endl;
+  cout << "calling get_headers [url=" << url << "]" << endl;
 
   headers_t responseHeaders;
   curl = create_curl_handle();
@@ -471,7 +477,7 @@ int get_headers(const char* path, headers_t& meta) {
       meta[key] = value;
     if(key == "Last-Modified")
       meta[key] = value;
-    if(key.substr(0, 13) == "X-Object-Meta")
+    if(key.substr(0, 10) == "X-Amz-Meta")
       meta[key] = value;
   }
 

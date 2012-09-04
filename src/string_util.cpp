@@ -108,7 +108,8 @@ string prepare_url(const char* url) {
   uri  = url_str.substr(0, uri_length);
   // host = bucket + "." + url_str.substr(uri_length, bucket_pos - uri_length).c_str();
   host = url_str.substr(uri_length, bucket_pos - uri_length).c_str();
-  path = url_str.substr((bucket_pos + bucket_length));
+  // path = url_str.substr((bucket_pos + bucket_length));
+  path = "/" + bucket + url_str.substr((bucket_pos + bucket_length));
 
   url_str = uri + host + path;
 
