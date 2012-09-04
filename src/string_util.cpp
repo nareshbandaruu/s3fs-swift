@@ -20,6 +20,7 @@
 #include <string.h>
 #include <syslog.h>
 
+#include <iostream>
 #include <sstream>
 #include <string>
 
@@ -105,7 +106,8 @@ string prepare_url(const char* url) {
     uri_length = 8;
 
   uri  = url_str.substr(0, uri_length);
-  host = bucket + "." + url_str.substr(uri_length, bucket_pos - uri_length).c_str();
+  // host = bucket + "." + url_str.substr(uri_length, bucket_pos - uri_length).c_str();
+  host = url_str.substr(uri_length, bucket_pos - uri_length).c_str();
   path = url_str.substr((bucket_pos + bucket_length));
 
   url_str = uri + host + path;

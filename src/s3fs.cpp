@@ -2916,12 +2916,15 @@ static int list_bucket(const char *path, struct s3_object **head) {
   query += "&max-keys=1000";
 
   while(truncated) {
-    string url = host + resource + "?" + query;
+    // string url = host + resource + "?" + query;
+    string url = host + resource + "/?" + query;
+    cout << "list_bucket[url=" << url << "]" <<  endl;
 
     if(next_marker != "")
       url += "&marker=" + urlEncode(next_marker);
 
     string my_url = prepare_url(url.c_str());
+    cout << "list_bucket[my_url=" << my_url << "]" <<  endl;
 
     auto_curl_slist headers;
     string date = get_date();
@@ -2933,7 +2936,8 @@ static int list_bucket(const char *path, struct s3_object **head) {
     }
 
     curl = create_curl_handle();
-    curl_easy_setopt(curl, CURLOPT_URL, my_url.c_str());
+    // curl_easy_setopt(curl, CURLOPT_URL, my_url.c_str());
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *) &body);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers.get());
@@ -3524,128 +3528,129 @@ static void s3fs_check_service(void) {
   new_headers.append("Authorization: AWS " + AWSAccessKeyId + ":" +
       calc_signature("GET", "", date, new_headers.get(), resource + "/?location"));
 
-  curl_easy_setopt(curl, CURLOPT_URL, my_url.c_str());
+  // curl_easy_setopt(curl, CURLOPT_URL, my_url.c_str());
+  curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
   curl_easy_setopt(curl, CURLOPT_HTTPHEADER, new_headers.get());
 
-  // Need to know if the curl response is just a timeout possibly
-  // indicating the the network is down or if the connection was
-  // acutally made - my_curl_easy_perform doesn't differentiate
-  // between the two
+//   // Need to know if the curl response is just a timeout possibly
+//   // indicating the the network is down or if the connection was
+//   // acutally made - my_curl_easy_perform doesn't differentiate
+//   // between the two
 
-  strcpy(body.text, "");
-  body.size = 0;
+//   strcpy(body.text, "");
+//   body.size = 0;
 
-  t = retries + 1;
-  while (t-- > 0) {
-    curlCode = curl_easy_perform(curl);
-    if(curlCode == 0)
-      break;
+//   t = retries + 1;
+//   while (t-- > 0) {
+//     curlCode = curl_easy_perform(curl);
+//     if(curlCode == 0)
+//       break;
 
-    if (curlCode != CURLE_OPERATION_TIMEDOUT) {
-      if (curlCode == CURLE_HTTP_RETURNED_ERROR) {
-         break;
-      } else {
-        switch (curlCode) {
-          case CURLE_SSL_CACERT:
-            // try to locate cert, if successful, then set the
-            // option and continue
-            if (curl_ca_bundle.size() == 0) {
-               locate_bundle();
-               if (curl_ca_bundle.size() != 0) {
-                  t++;
-                  curl_easy_setopt(curl, CURLOPT_CAINFO, curl_ca_bundle.c_str());
-                  continue;
-               }
-            }
-            syslog(LOG_ERR, "curlCode: %i  msg: %s", curlCode,
-                curl_easy_strerror(curlCode));;
-            fprintf (stderr, "%s: curlCode: %i -- %s\n", 
-                program_name.c_str(),
-                curlCode,
-                curl_easy_strerror(curlCode));
+//     if (curlCode != CURLE_OPERATION_TIMEDOUT) {
+//       if (curlCode == CURLE_HTTP_RETURNED_ERROR) {
+//          break;
+//       } else {
+//         switch (curlCode) {
+//           case CURLE_SSL_CACERT:
+//             // try to locate cert, if successful, then set the
+//             // option and continue
+//             if (curl_ca_bundle.size() == 0) {
+//                locate_bundle();
+//                if (curl_ca_bundle.size() != 0) {
+//                   t++;
+//                   curl_easy_setopt(curl, CURLOPT_CAINFO, curl_ca_bundle.c_str());
+//                   continue;
+//                }
+//             }
+//             syslog(LOG_ERR, "curlCode: %i  msg: %s", curlCode,
+//                 curl_easy_strerror(curlCode));;
+//             fprintf (stderr, "%s: curlCode: %i -- %s\n", 
+//                 program_name.c_str(),
+//                 curlCode,
+//                 curl_easy_strerror(curlCode));
               
-            destroy_curl_handle(curl);
-            exit(EXIT_FAILURE);
-            break;
+//             destroy_curl_handle(curl);
+//             exit(EXIT_FAILURE);
+//             break;
 
-#ifdef CURLE_PEER_FAILED_VERIFICATION
-          case CURLE_PEER_FAILED_VERIFICATION:
-            first_pos = bucket.find_first_of(".");
-            if(first_pos != string::npos) {
-              fprintf (stderr, "%s: curl returned a CURL_PEER_FAILED_VERIFICATION error\n", program_name.c_str());
-              fprintf (stderr, "%s: security issue found: buckets with periods in their name are incompatible with https\n", program_name.c_str());
-              fprintf (stderr, "%s: This check can be over-ridden by using the -o ssl_verify_hostname=0\n", program_name.c_str());
-              fprintf (stderr, "%s: The certificate will still be checked but the hostname will not be verified.\n", program_name.c_str());
-              fprintf (stderr, "%s: A more secure method would be to use a bucket name without periods.\n", program_name.c_str());
-            } else {
-              fprintf (stderr, "%s: my_curl_easy_perform: curlCode: %i -- %s\n", 
-                  program_name.c_str(),
-                  curlCode,
-                  curl_easy_strerror(curlCode));
-            }
-            destroy_curl_handle(curl);
-            exit(EXIT_FAILURE);
-            break;
-#endif
+// #ifdef CURLE_PEER_FAILED_VERIFICATION
+//           case CURLE_PEER_FAILED_VERIFICATION:
+//             first_pos = bucket.find_first_of(".");
+//             if(first_pos != string::npos) {
+//               fprintf (stderr, "%s: curl returned a CURL_PEER_FAILED_VERIFICATION error\n", program_name.c_str());
+//               fprintf (stderr, "%s: security issue found: buckets with periods in their name are incompatible with https\n", program_name.c_str());
+//               fprintf (stderr, "%s: This check can be over-ridden by using the -o ssl_verify_hostname=0\n", program_name.c_str());
+//               fprintf (stderr, "%s: The certificate will still be checked but the hostname will not be verified.\n", program_name.c_str());
+//               fprintf (stderr, "%s: A more secure method would be to use a bucket name without periods.\n", program_name.c_str());
+//             } else {
+//               fprintf (stderr, "%s: my_curl_easy_perform: curlCode: %i -- %s\n", 
+//                   program_name.c_str(),
+//                   curlCode,
+//                   curl_easy_strerror(curlCode));
+//             }
+//             destroy_curl_handle(curl);
+//             exit(EXIT_FAILURE);
+//             break;
+// #endif
 
-          default:
-            // Unknown error - return
-            syslog(LOG_ERR, "curlCode: %i  msg: %s", curlCode,
-                curl_easy_strerror(curlCode));;
-            if(body.text)
-              free(body.text);
-            destroy_curl_handle(curl);
-            return;
-        }
-      }
-    }
-  }
+//           default:
+//             // Unknown error - return
+//             syslog(LOG_ERR, "curlCode: %i  msg: %s", curlCode,
+//                 curl_easy_strerror(curlCode));;
+//             if(body.text)
+//               free(body.text);
+//             destroy_curl_handle(curl);
+//             return;
+//         }
+//       }
+//     }
+//   }
 
-  // We get here under three conditions:
-  //  - too many timeouts
-  //  - connection, but a HTTP error
-  //  - success
+//   // We get here under three conditions:
+//   //  - too many timeouts
+//   //  - connection, but a HTTP error
+//   //  - success
 
-  if(debug)
-    syslog(LOG_DEBUG, "curlCode: %i   msg: %s\n", 
-           curlCode, curl_easy_strerror(curlCode));
+//   if(debug)
+//     syslog(LOG_DEBUG, "curlCode: %i   msg: %s\n", 
+//            curlCode, curl_easy_strerror(curlCode));
 
-  // network is down
-  if(curlCode == CURLE_OPERATION_TIMEDOUT) {
-    if(body.text)
-      free(body.text);
-    body.text = NULL;
-    destroy_curl_handle(curl);
+//   // network is down
+//   if(curlCode == CURLE_OPERATION_TIMEDOUT) {
+//     if(body.text)
+//       free(body.text);
+//     body.text = NULL;
+//     destroy_curl_handle(curl);
 
-    return;
-  }
+//     return;
+//   }
 
-  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &responseCode);
-  if(debug)
-    syslog(LOG_DEBUG, "responseCode: %i\n", (int)responseCode);
+//   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &responseCode);
+//   if(debug)
+//     syslog(LOG_DEBUG, "responseCode: %i\n", (int)responseCode);
 
-  // Connection was made, but there is a HTTP error
-  if (curlCode == CURLE_HTTP_RETURNED_ERROR) {
-     if (responseCode == 403) {
-       fprintf (stderr, "%s: HTTP: 403 Forbidden - it is likely that your credentials are invalid\n", 
-         program_name.c_str());
-       exit(EXIT_FAILURE);
-     }
-     fprintf (stderr, "%s: HTTP: %i - report this to the s3fs developers\n", 
-       program_name.c_str(), (int)responseCode);
-     exit(EXIT_FAILURE);
-  }
+//   // Connection was made, but there is a HTTP error
+//   if (curlCode == CURLE_HTTP_RETURNED_ERROR) {
+//      if (responseCode == 403) {
+//        fprintf (stderr, "%s: HTTP: 403 Forbidden - it is likely that your credentials are invalid\n", 
+//          program_name.c_str());
+//        exit(EXIT_FAILURE);
+//      }
+//      fprintf (stderr, "%s: HTTP: %i - report this to the s3fs developers\n", 
+//        program_name.c_str(), (int)responseCode);
+//      exit(EXIT_FAILURE);
+//   }
 
-  // make sure remote mountpath exists and is a directory
-  if(mount_prefix.size() > 0) {
-    if(remote_mountpath_exists(mount_prefix.c_str()) != 0) {
-      fprintf(stderr, "%s: remote mountpath %s not found.\n", 
-          program_name.c_str(), mount_prefix.c_str());
+//   // make sure remote mountpath exists and is a directory
+//   if(mount_prefix.size() > 0) {
+//     if(remote_mountpath_exists(mount_prefix.c_str()) != 0) {
+//       fprintf(stderr, "%s: remote mountpath %s not found.\n", 
+//           program_name.c_str(), mount_prefix.c_str());
 
-      destroy_curl_handle(curl);
-      exit(EXIT_FAILURE);
-    }
-  }
+//       destroy_curl_handle(curl);
+//       exit(EXIT_FAILURE);
+//     }
+//   }
 
   // Success
   service_validated = true;
