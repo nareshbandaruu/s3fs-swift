@@ -37,6 +37,7 @@ bool nomultipart = false;
 bool service_validated = false;
 // static std::string host = "http://s3.amazonaws.com";
 static std::string host = "http://192.168.110.138:8080";
+static std::string auth_path = "/auth/v1.0/";
 static std::string service_path = "/";
 std::string bucket = "";
 std::string mount_prefix = "";

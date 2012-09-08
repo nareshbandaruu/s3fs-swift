@@ -407,6 +407,75 @@ static int mkdirp(const string& path, mode_t mode) {
   return 0;
 }
 
+int auth(headers_t& meta) {
+  int result;
+  CURL *curl;
+
+  if(foreground) 
+    cout << "calling auth: [host=" << host << "][auth_path=" << auth_path << "]" << endl;
+
+  auto_curl_slist headers;
+  // headers.append("Host: " + host);
+  headers.append("Accept-Encoding: identity");
+  headers.append("X-Auth-User: " + AWSAccessKeyId);
+  headers.append("X-Auth-Key: " + AWSSecretAccessKey);
+
+  struct BodyStruct body;
+  body.text = (char *) malloc(1);
+  body.size = 0;
+
+  headers_t responseHeaders;
+  string resource(urlEncode(auth_path));
+  string url(host + resource);
+
+  curl = create_curl_handle();
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&body);
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
+  curl_easy_setopt(curl, CURLOPT_HEADERDATA, &responseHeaders);
+  curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, header_callback);
+  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers.get());
+  curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+
+  if(debug)
+    syslog(LOG_DEBUG, "auth: now calling my_curl_easy_perform");
+
+  result = my_curl_easy_perform(curl, &body);
+
+  if(body.text)
+    free(body.text);
+  body.text = NULL;
+  destroy_curl_handle(curl);
+
+  if(result != 0)
+    return result;
+
+  if(debug)
+    syslog(LOG_DEBUG, "auth: now returning from my_curl_easy_perform");
+
+  for (headers_t::iterator iter = responseHeaders.begin(); iter != responseHeaders.end(); ++iter) {
+    string key = (*iter).first;
+    string value = (*iter).second;
+
+    stringstream ss;
+    ss << "auth: [key=" << key << "][value=" << value << "]" << endl;
+    if(foreground) 
+      cout << ss.str();
+    // if(debug)
+    //   syslog(LOG_DEBUG, ss.str());
+
+    if(key == "X-Storage-Url")
+      meta[key] = value;
+    if(key == "X-Storage-Token")
+      meta[key] = value;
+    if(key == "X-Auth-Token")
+      meta[key] = value;
+    if(key == "Date")
+      meta[key] = value;
+  }
+
+  return result;
+}
+
 /**
  * @return fuse return code
  * TODO return pair<int, headers_t>?!?
