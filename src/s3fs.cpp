@@ -1907,7 +1907,7 @@ static int s3fs_rmdir(const char *path) {
         query += urlEncode(string(s3_realpath).substr(1));
 
       query += "&limit=1";
-      url = host + resource + "?"+ query;
+      url = host + resource + "/?"+ query;
 
       curl = create_curl_handle();
       my_url = prepare_url(url.c_str());
@@ -2204,7 +2204,7 @@ static int rename_directory(const char *from, const char *to) {
     query += "&max-keys=";
     query.append(IntToStr(max_keys));
 
-    string url = host + resource + "?" + query;
+    string url = host + resource + "/?" + query;
 
     {
       curl = create_curl_handle();
