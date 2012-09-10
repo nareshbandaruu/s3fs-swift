@@ -700,9 +700,12 @@ static int put_headers(const char *path, headers_t meta) {
   if(buf.st_size >= FIVE_GB)
     return(put_multipart_headers(path, meta));
 
+  headers_t authHeaders;
+  auth(authHeaders);
+
   s3_realpath = get_realpath(path);
-  resource = urlEncode(service_path + bucket + s3_realpath);
-  url = host + resource;
+  resource = urlEncode(bucket + s3_realpath);
+  url = authHeaders["X-Storage-Url"] + "/" + resource;
 
   body.text = (char *)malloc(1);
   body.size = 0;
@@ -726,14 +729,15 @@ static int put_headers(const char *path, headers_t meta) {
   }
 
   if(public_bucket.substr(0,1) != "1")
-    headers.append("Authorization: AWS " + AWSAccessKeyId + ":" +
-      calc_signature("PUT", ContentType, date, headers.get(), resource));
+    // headers.append("Authorization: AWS " + AWSAccessKeyId + ":" +
+    //   calc_signature("PUT", ContentType, date, headers.get(), resource));
+    headers.append("X-Auth-Token: " + authHeaders["X-Auth-Token"]);
 
   curl = create_curl_handle();
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&body);
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
-  curl_easy_setopt(curl, CURLOPT_UPLOAD, true); // HTTP PUT
-  curl_easy_setopt(curl, CURLOPT_INFILESIZE, 0); // Content-Length
+  curl_easy_setopt(curl, CURLOPT_POST, true);
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, 0);
   curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers.get());
 
   if(debug)
