@@ -2995,7 +2995,7 @@ static int append_objects_from_xml(const char *xml, struct s3_object **head) {
 
   ctx = xmlXPathNewContext(doc);
   xmlXPathRegisterNs(ctx, (xmlChar *) "s3",
-                     (xmlChar *) "http://s3.amazonaws.com/doc/2006-03-01/");
+                     (xmlChar *) "http://s3.amazonaws.com/doc/2006-03-01");
   
   contents_xp = xmlXPathEvalExpression((xmlChar *) "//s3:Contents", ctx);
   content_nodes = contents_xp->nodesetval;
@@ -3032,7 +3032,7 @@ static const char *get_next_marker(const char *xml) {
   doc = xmlReadMemory(xml, strlen(xml), "", NULL, 0);
   ctx = xmlXPathNewContext(doc);
   xmlXPathRegisterNs(ctx, (xmlChar *) "s3",
-                     (xmlChar *) "http://s3.amazonaws.com/doc/2006-03-01/");
+                     (xmlChar *) "http://s3.amazonaws.com/doc/2006-03-01");
   marker_xp = xmlXPathEvalExpression((xmlChar *) "//s3:NextMarker", ctx);
   nodes = marker_xp->nodesetval;
 
