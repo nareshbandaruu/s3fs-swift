@@ -1996,8 +1996,12 @@ static int s3fs_symlink(const char *from, const char *to) {
     cout << "s3fs_symlink[from=" << from << "][to=" << to << "]" << endl;
 
   headers_t headers;
-  headers["X-Object-Meta-Mode"] = str(S_IFLNK);
-  headers["X-Object-Meta-Mtime"] = str(time(NULL));
+  time_t mtime = time(NULL);
+  headers["Content-Type"] = str("application/x-symlink");
+  headers["X-Amz-Meta-Gid"] = str(getgid());
+  headers["X-Amz-Meta-Mode"] = str(S_IFLNK);
+  headers["X-Amz-Meta-Mtime"] = str(mtime);
+  headers["X-Amz-Meta-Uid"] = str(getuid());
 
   fd = fileno(tmpfile());
   if(fd == -1) {
