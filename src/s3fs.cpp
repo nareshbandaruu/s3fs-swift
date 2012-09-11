@@ -2510,7 +2510,7 @@ static int s3fs_chmod(const char *path, mode_t mode) {
   if(result != 0)
     return result;
 
-  meta["X-Object-Meta-Mode"] = str(mode);
+  meta["X-Amz-Meta-Mode"] = str(mode);
 
   if(put_headers(path, meta) != 0)
     return -EIO;
@@ -2533,11 +2533,11 @@ static int s3fs_chown(const char *path, uid_t uid, gid_t gid) {
 
   struct passwd *aaa = getpwuid(uid);
   if(aaa != 0)
-    meta["X-Object-Meta-Uid"] = str((*aaa).pw_uid);
+    meta["X-Amz-Meta-Uid"] = str((*aaa).pw_uid);
 
   struct group *bbb = getgrgid(gid);
   if(bbb != 0)
-    meta["X-Object-Meta-Gid"] = str((*bbb).gr_gid);
+    meta["X-Amz-Meta-Gid"] = str((*bbb).gr_gid);
 
   if(put_headers(path, meta) != 0)
     return -EIO;
