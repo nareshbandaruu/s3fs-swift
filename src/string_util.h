@@ -31,6 +31,7 @@ std::string lower(std::string s);
 std::string IntToStr(int);
 std::string get_date();
 std::string urlEncode(const std::string &s);
+std::string urlDecode(const std::string &s);
 std::string prepare_url(const char* url);
 
 

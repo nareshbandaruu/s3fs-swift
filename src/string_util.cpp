@@ -17,6 +17,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+#include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
 
@@ -86,6 +87,32 @@ string urlEncode(const string &s) {
     }
   }
 
+  return result;
+}
+
+/**
+ * urlDecode a fuse encoded path,
+ * taking into special consideration "/",
+ * otherwise regular urlDecode.
+ */
+string urlDecode(const string &s) {
+  string result;
+  for (unsigned i = 0; i < s.length(); ++i) {
+    if (s[i] == '/') // Note- special case for fuse paths...
+      result += s[i];
+    else if (isalnum(s[i]))
+      result += s[i];
+    else if (s[i] == '.' || s[i] == '-' || s[i] == '*' || s[i] == '_')
+      result += s[i];
+    else if (s[i] == '+')
+      result += ' ';
+    else if (s[i] == '%' && i + 2 < s.length()) {
+      unsigned c = static_cast<unsigned>(strtol(s.substr(i + 1, 2).c_str(), NULL, 16));
+      result += c;
+      i += 2;
+    }
+  }
+  
   return result;
 }
 
