@@ -705,6 +705,7 @@ static int put_headers(const char *path, headers_t meta) {
 
   s3_realpath = get_realpath(path);
   resource = urlEncode(bucket + s3_realpath);
+  resource = urlEncode(resource);
   url = authHeaders["X-Storage-Url"] + "/" + resource;
 
   body.text = (char *)malloc(1);
@@ -2777,7 +2778,8 @@ static int s3fs_readdir(
   // populate fuse buffer
   headref = head;
   while(headref != NULL) {
-    filler(buf, headref->name, 0, 0);
+    string name(headref->name);
+    filler(buf, urlDecode(name).c_str(), 0, 0);
     headref = headref->next;
   }
   headref = head;
