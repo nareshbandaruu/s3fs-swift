@@ -19,5 +19,6 @@ int get_stat_cache_entry(const char *path, struct stat *buf);
 void add_stat_cache_entry(const char *path, struct stat *st);
 void delete_stat_cache_entry(const char *path);
 void truncate_stat_cache();
+void print_stat_cache_entry();
 
 #endif // S3FS_CACHE_H_

@@ -99,3 +99,13 @@ void truncate_stat_cache() {
 
   cout << "    purged " << path_to_delete << " from the stat cache" << endl;
 }
+
+void print_stat_cache_entry() {
+  if(!foreground)
+    return;
+
+  pthread_mutex_lock(&stat_cache_lock);
+  for (stat_cache_t::iterator iter = stat_cache.begin(); iter != stat_cache.end(); ++iter)
+    cout << "    print stat cache [path=" << (*iter).first << "]" << endl;
+  pthread_mutex_unlock(&stat_cache_lock);
+}
