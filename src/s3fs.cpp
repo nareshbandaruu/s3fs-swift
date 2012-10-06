@@ -760,20 +760,22 @@ static int put_headers(const char *path, headers_t meta) {
   if(result != 0)
     return result;
 
-  // Update mtime in local file cache.
-  if(meta.count("X-Object-Meta-Mtime") > 0 && use_cache.size() > 0) {
-    struct stat st;
-    struct utimbuf n_mtime;
-    string cache_path(use_cache + "/" + bucket + path);
+  // // Update mtime in local file cache.
+  // if(meta.count("X-Object-Meta-Mtime") > 0 && use_cache.size() > 0) {
+  //   struct stat st;
+  //   struct utimbuf n_mtime;
+  //   string cache_path(use_cache + "/" + bucket + path);
 
-    if((stat(cache_path.c_str(), &st)) == 0) {
-      n_mtime.modtime = strtoul(meta["X-Object-Meta-Mtime"].c_str(), (char **) NULL, 10);
-      n_mtime.actime = n_mtime.modtime;
-      if((utime(cache_path.c_str(), &n_mtime)) == -1) {
-        YIKES(-errno);
-      }
-    }
-  }
+  //   if((stat(cache_path.c_str(), &st)) == 0) {
+  //     n_mtime.modtime = strtoul(meta["X-Object-Meta-Mtime"].c_str(), (char **) NULL, 10);
+  //     n_mtime.actime = n_mtime.modtime;
+  //     if((utime(cache_path.c_str(), &n_mtime)) == -1) {
+  //       YIKES(-errno);
+  //     }
+  //   }
+  // }
+
+  delete_stat_cache_entry(path);
 
   return 0;
 }
@@ -2073,7 +2075,7 @@ static int s3fs_symlink(const char *from, const char *to) {
   time_t mtime = time(NULL);
   headers["Content-Type"] = str("application/x-symlink");
   headers["X-Amz-Meta-Gid"] = str(getgid());
-  headers["X-Amz-Meta-Mode"] = str(S_IFLNK);
+  headers["X-Amz-Meta-Mode"] = str(S_IFLNK | S_IRWXU | S_IRWXG | S_IRWXO);
   headers["X-Amz-Meta-Mtime"] = str(mtime);
   headers["X-Amz-Meta-Uid"] = str(getuid());
 
